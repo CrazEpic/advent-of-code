@@ -2,6 +2,9 @@ import java.util.*;
 import java.io.File;
 import java.lang.Math;
 
+// NOTE THIS SOLUTION IS NOT GENERALIZED
+// THE ADVENT OF CODE FOR DAY 8 WAS CLEAN TO DO THIS
+
 public class Main{
 	public static void main(String[] args) throws Exception{
         Scanner input = new Scanner(new File("b.txt"));
