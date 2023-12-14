@@ -1,159 +1,109 @@
 import java.util.*;
 import java.io.File;
 import java.lang.Math;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.lang.Thread;
 
 public class Main{
     public static void main (String[] args) throws Exception{
-        Scanner input = new Scanner(new File("a.txt"));
-        int sum = 0;
+        Scanner input = new Scanner(new File("b.txt"));
+        long sum = 0;
+        long lineCounter = 0;
+        ArrayList<HotSpringRecord> threads = new ArrayList<>();
+        long cores = Runtime.getRuntime().availableProcessors();
+        System.out.println("NUMBER OF CPUS: " + cores);
+        final long startTime = System.currentTimeMillis();
         while(input.hasNextLine()){
             String line = input.nextLine().trim();
-            System.out.println(line);
+            lineCounter++;
+            //System.out.println(line);
             String springs = line.split(" ")[0];
-            ArrayList<Integer> springSizes = new ArrayList<>();
+            ArrayList<Long> springSizes = new ArrayList<>();
             Scanner parser = new Scanner(line.split(" ")[1].replaceAll(",", " "));
-            while(parser.hasNextInt()){
-                springSizes.add(parser.nextInt());
+            while(parser.hasNextLong()){
+                springSizes.add(parser.nextLong());
             }
+            
             // Part 2
             String toRepeatSpring = springs;
-            ArrayList<Integer> toRepeatSizes = new ArrayList<>(springSizes);
-            for(int i = 0; i < 4; i++){
+            ArrayList<Long> toRepeatSizes = new ArrayList<>(springSizes);
+            for(long i = 0; i < 4; i++){
                 springs += "?" + toRepeatSpring;
-                for(int size: toRepeatSizes){
+                for(long size: toRepeatSizes){
                     springSizes.add(size);
                 }
             }
             // Part 2 end
-            //sum += generateAndCountMatches(springs, springSizes, getRegexFromSizes(springSizes));
-            sum += generateAndCountMatchesPart2(springs, springSizes, getRegexFromSizes(springSizes));
+            HotSpringRecord thread = new HotSpringRecord(springs, springSizes, lineCounter);
+            //System.out.println("RUNNING THREAD: " + lineCounter);
+            thread.start();
+            threads.add(thread);
         }
+        for(int i = 0; i < threads.size(); i++){ // wait for all threads
+            threads.get(i).join();
+            sum += threads.get(i).combinations;
+        }
+        final long endTime = System.currentTimeMillis();
+        System.out.println("Total execution time: " + (endTime - startTime));
         System.out.println(sum);
     }
-    public static int generateAndCountMatchesPart2(String spring, ArrayList<Integer> springSizes, String regex){
-        int countQuestionMarks = 0;
-        int countHashtags = 0;
-        int totalHashtags = 0;
-        ArrayList<Integer> questionMarkPositions = new ArrayList<>();
-        for(int i = 0; i < spring.length(); i++){
-            if(spring.charAt(i) == '?'){
-                questionMarkPositions.add(i);
-                countQuestionMarks++;
-            }
-            if(spring.charAt(i) == '#')
-                countHashtags++;
-        }
-        for(int size: springSizes)
-            totalHashtags += size;
-        return part2Helper("", 0, countQuestionMarks, 0, totalHashtags - countHashtags, spring, regex, questionMarkPositions);
+}
+class HotSpringRecord extends Thread{
+
+    public String currentSpring;
+    public ArrayList<Long> springSizes;
+    public long combinations;
+    public long lineNumber;
+    public HotSpringRecord(String s, ArrayList<Long> sizes, long num){
+        currentSpring = s;
+        springSizes = sizes;
+        lineNumber = num;
+        combinations = -1;
     }
-    public static int part2Helper(String currentString, int pos, int length, int countHashTags, int limit, String spring, String regex, ArrayList<Integer> questionMarkPositions){
-        int count = 0;
-        System.out.println(length);
-        // Base Case
-        if(pos == length){
-            Pattern pattern = Pattern.compile(regex, Pattern.CASE_INSENSITIVE);
-            int markCounter = 0;
-            String testString = spring.toString();
-            // replace the ?s
-            for(int i: questionMarkPositions){
-                testString = testString.substring(0, i) + currentString.charAt(markCounter) + testString.substring(i+1);
-                markCounter++;
-            }
-            Matcher matcher = pattern.matcher(testString);
-            boolean matchFound = matcher.matches();
-            if(matchFound){
+
+    @Override
+    public void run(){
+        combinations = countMatches(currentSpring + '.', 0, 0, '.', springSizes);
+        System.out.println("FINISHED LINE: " + lineNumber + " | OUTPUT: " + combinations);
+        this.interrupt();
+    }
+
+    private static long countMatches(String currentSpring, int position, long pickedUpHashtags, char prevChar, ArrayList<Long> springSizes){
+        if(position == currentSpring.length()){
+            if(springSizes.isEmpty()){ // correct number of hashtags
                 return 1;
             }
-            else{
+            else{ // not enough hashtags
                 return 0;
             }
         }
-        // Recursive Step
-        count += part2Helper(currentString + ".", pos + 1, length, countHashTags, limit, spring, regex, questionMarkPositions);
-        if(countHashTags < limit)
-            count += part2Helper(currentString + "#", pos + 1, length, countHashTags + 1, limit, spring, regex, questionMarkPositions);
+        if(currentSpring.charAt(position) == '.'){
+            if(prevChar == '#'){ // drop your hashtags
+                if(springSizes.isEmpty()){
+                    return 0;
+                }
+                else if(springSizes.get(0) != pickedUpHashtags){ // mismatch
+                    return 0;
+                }
+                else{ // mark contiguous springs
+                    springSizes.remove(0);
+                    return countMatches(currentSpring, position + 1, 0, currentSpring.charAt(position), springSizes);
+                }
+            }
+            else{
+                return countMatches(currentSpring, position + 1, pickedUpHashtags, currentSpring.charAt(position), springSizes);
+            }
+        }
+        else if(currentSpring.charAt(position) == '#'){
+            return countMatches(currentSpring, position + 1, pickedUpHashtags + 1, currentSpring.charAt(position), springSizes);
+        }
+        // currentSpring.charAt(position) == '?'
+        // new recursion branches
+        long count = 0;
+        String str1 = currentSpring.substring(0, position) + '.' + currentSpring.substring(position + 1);
+        String str2 = currentSpring.substring(0, position) + '#' + currentSpring.substring(position + 1);
+        //System.out.println("STR1: " + str1 + "| STR2: " + str2);  
+        count += countMatches(str1, position, pickedUpHashtags, prevChar, new ArrayList<Long>(springSizes));
+        count += countMatches(str2, position, pickedUpHashtags, prevChar, new ArrayList<Long>(springSizes));
         return count;
-    }
-    public static int generateAndCountMatches(String spring, ArrayList<Integer> springSizes, String regex){
-        int count = 0;
-        int countQuestionMarks = 0;
-        int countHashtags = 0;
-        int totalHashtags = 0;
-        ArrayList<Integer> questionMarkPositions = new ArrayList<>();
-        for(int i = 0; i < spring.length(); i++){
-            if(spring.charAt(i) == '?'){
-                questionMarkPositions.add(i);
-                countQuestionMarks++;
-            }
-            if(spring.charAt(i) == '#')
-                countHashtags++;
-        }
-        for(int size: springSizes)
-            totalHashtags += size;
-        // permutations of # and . in a specfic order, to fill the question marks ? 
-        ArrayList<String> possibilities = getAllPossibilitiesLimitHashtags(countQuestionMarks, totalHashtags - countHashtags);
-        Pattern pattern = Pattern.compile(regex, Pattern.CASE_INSENSITIVE);
-        for(String p: possibilities){
-            int markCounter = 0;
-            String testString = spring.toString();
-            // replace the ?s
-            for(int i: questionMarkPositions){
-                testString = testString.substring(0, i) + p.charAt(markCounter) + testString.substring(i+1);
-                markCounter++;
-            }
-            Matcher matcher = pattern.matcher(testString);
-            boolean matchFound = matcher.matches();
-            if(matchFound){
-                count++;
-            }
-        }
-        return count;
-    }
-    public static ArrayList<String> getAllPossibilities(int length){
-        ArrayList<String> possibilities = new ArrayList<>();
-        getAllPossibilitiesHelper("", 0, length, possibilities);
-        return possibilities;
-    }
-    public static void getAllPossibilitiesHelper(String currentString, int pos, int length, ArrayList<String> possibilities){
-        // Base Case
-        if(pos == length){
-            possibilities.add(currentString);
-            return;
-        }
-        // Recursive Step
-        getAllPossibilitiesHelper(currentString + ".", pos + 1, length, possibilities);
-        getAllPossibilitiesHelper(currentString + "#", pos + 1, length, possibilities);
-    }
-    public static ArrayList<String> getAllPossibilitiesLimitHashtags(int length, int limit){
-        ArrayList<String> possibilities = new ArrayList<>();
-        System.out.println(length);
-        getAllPossibilitiesLimitHashtagsHelper("", 0, length, 0, limit, possibilities);
-        return possibilities;
-    }
-    public static void getAllPossibilitiesLimitHashtagsHelper(String currentString, int pos, int length, int countHashTags, int limit, ArrayList<String> possibilities){
-        // Base Case
-        if(pos == length){
-            possibilities.add(currentString);
-            return;
-        }
-        // Recursive Step
-        getAllPossibilitiesLimitHashtagsHelper(currentString + ".", pos + 1, length, countHashTags, limit, possibilities);
-        if(countHashTags < limit)
-            getAllPossibilitiesLimitHashtagsHelper(currentString + "#", pos + 1, length, countHashTags + 1, limit, possibilities);
-    }
-    public static String getRegexFromSizes(ArrayList<Integer> sizes){
-        String anyDots = "[.]*";
-        String oneOrMoreDots = "[.]+";
-        String springRegex = anyDots;
-        for(int i = 0; i < sizes.size() - 1; i++){
-            springRegex += "#{" + sizes.get(i) + "}";
-            springRegex += oneOrMoreDots;
-        }
-        springRegex += "#{" + sizes.get(sizes.size()-1) + "}";
-        springRegex += anyDots;
-        return springRegex;
     }
 }
