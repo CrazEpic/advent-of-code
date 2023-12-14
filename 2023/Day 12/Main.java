@@ -1,16 +1,12 @@
 import java.util.*;
 import java.io.File;
 import java.lang.Math;
-import java.lang.Thread;
 
 public class Main{
     public static void main (String[] args) throws Exception{
         Scanner input = new Scanner(new File("b.txt"));
         long sum = 0;
         long lineCounter = 0;
-        ArrayList<HotSpringRecord> threads = new ArrayList<>();
-        long cores = Runtime.getRuntime().availableProcessors();
-        System.out.println("NUMBER OF CPUS: " + cores);
         final long startTime = System.currentTimeMillis();
         while(input.hasNextLine()){
             String line = input.nextLine().trim();
@@ -33,42 +29,29 @@ public class Main{
                 }
             }
             // Part 2 end
-            HotSpringRecord thread = new HotSpringRecord(springs, springSizes, lineCounter);
-            //System.out.println("RUNNING THREAD: " + lineCounter);
-            thread.start();
-            threads.add(thread);
-        }
-        for(int i = 0; i < threads.size(); i++){ // wait for all threads
-            threads.get(i).join();
-            sum += threads.get(i).combinations;
+            long count = countMatches(springs + '.', 0, '.', springSizes);
+            System.out.println(count);
+            sum += count;
         }
         final long endTime = System.currentTimeMillis();
         System.out.println("Total execution time: " + (endTime - startTime));
         System.out.println(sum);
-    }
-}
-class HotSpringRecord extends Thread{
-
-    public String currentSpring;
-    public ArrayList<Long> springSizes;
-    public long combinations;
-    public long lineNumber;
-    public HotSpringRecord(String s, ArrayList<Long> sizes, long num){
-        currentSpring = s;
-        springSizes = sizes;
-        lineNumber = num;
-        combinations = -1;
+        // for (String name: memoize.keySet()) {
+        //     System.out.println("ALL MAPPINGS FOR " + name);
+        //     HashMap<ArrayList<Long>, Long> map = memoize.get(name);
+        //     for (ArrayList<Long> m: map.keySet()) {
+        //         String key = m.toString();
+        //         String value = map.get(m).toString();
+        //         System.out.printf("%10s%10s\n", key, value);
+        //     }
+        //     System.out.println("");
+        // }
     }
 
-    @Override
-    public void run(){
-        combinations = countMatches(currentSpring + '.', 0, 0, '.', springSizes);
-        System.out.println("FINISHED LINE: " + lineNumber + " | OUTPUT: " + combinations);
-        this.interrupt();
-    }
+    public static HashMap<String, HashMap<ArrayList<Long>, Long>> memoize = new HashMap<String, HashMap<ArrayList<Long>, Long>>();
 
-    private static long countMatches(String currentSpring, int position, long pickedUpHashtags, char prevChar, ArrayList<Long> springSizes){
-        if(position == currentSpring.length()){
+    public static long countMatches(String currentSpring, long pickedUpHashtags, char prevChar, ArrayList<Long> springSizes){
+        if(currentSpring.equals("")){
             if(springSizes.isEmpty()){ // correct number of hashtags
                 return 1;
             }
@@ -76,7 +59,7 @@ class HotSpringRecord extends Thread{
                 return 0;
             }
         }
-        if(currentSpring.charAt(position) == '.'){
+        if(currentSpring.charAt(0) == '.'){
             if(prevChar == '#'){ // drop your hashtags
                 if(springSizes.isEmpty()){
                     return 0;
@@ -86,24 +69,39 @@ class HotSpringRecord extends Thread{
                 }
                 else{ // mark contiguous springs
                     springSizes.remove(0);
-                    return countMatches(currentSpring, position + 1, 0, currentSpring.charAt(position), springSizes);
+                    return countMatches(currentSpring.substring(1), 0, currentSpring.charAt(0), springSizes);
                 }
             }
             else{
-                return countMatches(currentSpring, position + 1, pickedUpHashtags, currentSpring.charAt(position), springSizes);
+                return countMatches(currentSpring.substring(1), pickedUpHashtags, currentSpring.charAt(0), springSizes);
             }
         }
-        else if(currentSpring.charAt(position) == '#'){
-            return countMatches(currentSpring, position + 1, pickedUpHashtags + 1, currentSpring.charAt(position), springSizes);
+        else if(currentSpring.charAt(0) == '#'){
+            if(prevChar == '.'){ // starting a hot spring
+                if(memoize.containsKey(currentSpring)){
+                    if(memoize.get(currentSpring).containsKey(springSizes)){
+                        return memoize.get(currentSpring).get(springSizes);
+                    }
+                }
+                ArrayList<Long> copySpringSizes = new ArrayList<>(springSizes);
+                long countFromHotSpringStart = countMatches(currentSpring.substring(1), pickedUpHashtags + 1, currentSpring.charAt(0), springSizes);
+                if(!(memoize.containsKey(currentSpring)))
+                    memoize.put(currentSpring, new HashMap<>());
+                if(!memoize.get(currentSpring).containsKey(copySpringSizes))
+                    memoize.get(currentSpring).put(copySpringSizes, countFromHotSpringStart);
+                return countFromHotSpringStart;
+            }
+            else{
+                return countMatches(currentSpring.substring(1), pickedUpHashtags + 1, currentSpring.charAt(0), springSizes);
+            }
         }
         // currentSpring.charAt(position) == '?'
         // new recursion branches
-        long count = 0;
-        String str1 = currentSpring.substring(0, position) + '.' + currentSpring.substring(position + 1);
-        String str2 = currentSpring.substring(0, position) + '#' + currentSpring.substring(position + 1);
+        String str1 = '.' + currentSpring.substring(1);
+        String str2 = '#' + currentSpring.substring(1);
         //System.out.println("STR1: " + str1 + "| STR2: " + str2);  
-        count += countMatches(str1, position, pickedUpHashtags, prevChar, new ArrayList<Long>(springSizes));
-        count += countMatches(str2, position, pickedUpHashtags, prevChar, new ArrayList<Long>(springSizes));
-        return count;
+        long count1 = countMatches(str1, pickedUpHashtags, prevChar, new ArrayList<Long>(springSizes));
+        long count2 = countMatches(str2, pickedUpHashtags, prevChar, new ArrayList<Long>(springSizes));
+        return count1 + count2;
     }
 }
